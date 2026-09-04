@@ -10,16 +10,19 @@ import { notFoundHandler, errorHandler } from "./middlewares/errorHandler.js";
 
 export const app = express();
 
-// Nécessaire sur Render (reverse proxy) pour que req.ip et le rate limiting
-// par IP reflètent la vraie IP du client plutôt que celle du proxy.
 app.set("trust proxy", 1);
 
-app.use(helmet());
+// Configuration Helmet assouplie en dev
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+  })
+);
 
-// CORS strict : un seul domaine autorisé (le frontend), cookies inclus
+// CORS : Autorise sans condition en développement, strict en production
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin: isProd ? env.CLIENT_URL : true,
     credentials: true,
   })
 );
@@ -32,4 +35,4 @@ app.use(morgan(isProd ? "combined" : "dev"));
 app.use("/api", routes);
 
 app.use(notFoundHandler);
-app.use(errorHandler); // doit rester le dernier middleware monté
+app.use(errorHandler);

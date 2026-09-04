@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "build": "prisma generate"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.7.0",
@@ -33,7 +34,7 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "nodemon": "3.1.4",
+    "nodemon": "^3.1.4",
     "prisma": "7.7.0"
   }
 }

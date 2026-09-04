@@ -1,0 +1,23 @@
+import * as chatService from "../services/chatService.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+
+export const getMyConversation = asyncHandler(async (req, res) => {
+  const conversation = await chatService.getOrCreateClientConversation(req.user.id);
+  res.json({ success: true, data: { conversation } });
+});
+
+export const getAllConversations = asyncHandler(async (req, res) => {
+  const result = await chatService.getAllConversations(req.query);
+  res.json({ success: true, data: result });
+});
+
+export const sendMessage = asyncHandler(async (req, res) => {
+  const { conversationId } = req.params;
+  const result = await chatService.saveMessage(conversationId, req.user.id, req.body);
+  res.status(201).json({ success: true, data: result });
+});
+
+export const markAsRead = asyncHandler(async (req, res) => {
+  await chatService.markMessagesAsRead(req.params.conversationId, req.user.id);
+  res.json({ success: true, data: null });
+});
