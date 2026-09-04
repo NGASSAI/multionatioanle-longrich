@@ -1,0 +1,378 @@
+// Schéma Prisma — Multinationale Longrich
+// Connexion directe (non poolée) utilisée pour les migrations (voir .env DIRECT_DATABASE_URL)
+// Connexion poolée utilisée par le client applicatif (voir .env DATABASE_URL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 : la connexion ne se déclare plus ici mais dans prisma.config.js
+// (pour la CLI/migrations) et via un driver adapter dans src/config/prisma.js
+// (pour le client applicatif). Voir prisma.config.js à la racine.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  client
+  admin
+  super_admin
+}
+
+enum UserStatus {
+  active
+  blocked
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  shipped
+  delivered
+  cancelled
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+}
+
+enum OrderSource {
+  website
+  whatsapp
+  phone_call
+  admin
+}
+
+enum ConversationStatus {
+  open
+  closed
+}
+
+enum MessageType {
+  text
+  image
+}
+
+// ---------------------------------------------------------------------------
+// Utilisateurs & auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id     String     @id @default(cuid())
+  name   String
+  email  String     @unique
+  phone  String?
+  avatar String?
+
+  passwordHash String
+  // tokenVersion permet d'invalider tous les tokens JWT actifs
+  // (incrémenté à chaque changement de mot de passe)
+  tokenVersion Int    @default(0)
+
+  // Nom secret utilisé pour le reset de mot de passe sans email (jamais stocké en clair)
+  secretNameHash  String?
+  secretNameSetAt DateTime?
+
+  status UserStatus @default(active)
+  role   Role       @default(client)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productLikes    ProductLike[]
+  productComments ProductComment[]
+
+  ordersAsClient  Order[] @relation("ClientOrders")
+  ordersConfirmed Order[] @relation("ConfirmedByAdmin")
+
+  conversationsAsClient Conversation[] @relation("ClientConversations")
+  conversationsAsAdmin  Conversation[] @relation("AdminConversations")
+  messages              Message[]
+
+  notifications      Notification[]
+  pushSubscriptions   PushSubscription[]
+  activityLogs        ActivityLog[]
+  passwordResetSessions PasswordResetSession[]
+
+  @@index([role])
+}
+
+// Représente l'accès temporaire (10 min) généré après vérification réussie du nom secret.
+// Le token brut n'est jamais stocké : seul son hash l'est.
+model PasswordResetSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  image       String?
+
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryHierarchy")
+
+  isActive Boolean @default(true)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+
+  name            String
+  slug            String  @unique
+  description     String?
+  price           Decimal @db.Decimal(10, 2)
+  promoPrice      Decimal? @db.Decimal(10, 2) // doit toujours être < price (vérifié en appli, voir validators)
+  stock           Int     @default(0)
+  sku             String  @unique
+  isActive        Boolean @default(true)
+  isFeatured      Boolean @default(false)
+  metaTitle       String?
+  metaDescription String?
+
+  // Compteurs dénormalisés pour éviter les COUNT() répétés
+  likesCount    Int @default(0)
+  commentsCount Int @default(0)
+  viewsCount    Int @default(0)
+
+  images   ProductImage[]
+  likes    ProductLike[]
+  comments ProductComment[]
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive, isFeatured])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  path      String
+  isMain    Boolean @default(false)
+  order     Int     @default(0)
+
+  @@index([productId])
+}
+
+model ProductLike {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model ProductComment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   ProductComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  ProductComment[] @relation("CommentReplies")
+
+  comment    String
+  isApproved Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([parentId])
+}
+
+// ---------------------------------------------------------------------------
+// Commandes
+// ---------------------------------------------------------------------------
+
+model Order {
+  id          String @id @default(cuid())
+  orderNumber String @unique
+
+  // Nullable : une commande créée par l'admin pour un client hors-ligne peut ne pas avoir de compte User
+  userId String?
+  user   User?   @relation("ClientOrders", fields: [userId], references: [id], onDelete: SetNull)
+
+  clientName    String
+  clientPhone   String
+  clientAddress String?
+
+  status        OrderStatus   @default(pending)
+  paymentMethod String        @default("cash_on_delivery")
+  paymentStatus PaymentStatus @default(unpaid)
+  source        OrderSource
+
+  total Decimal @db.Decimal(10, 2)
+  notes String?
+
+  confirmedById String?
+  confirmedByAdmin User? @relation("ConfirmedByAdmin", fields: [confirmedById], references: [id], onDelete: SetNull)
+  confirmedAt   DateTime?
+
+  items OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([source])
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Nullable + SetNull : la suppression d'un produit ne doit jamais casser l'historique de commandes
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  // Dupliqués volontairement au moment de la commande : ne dépendent jamais du produit courant
+  productName String
+  unitPrice   Decimal @db.Decimal(10, 2)
+  quantity    Int
+  subtotal    Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Chat temps réel
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id      String @id @default(cuid())
+  clientId String
+  client   User   @relation("ClientConversations", fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Assignée au premier admin qui répond
+  adminId String?
+  admin   User?   @relation("AdminConversations", fields: [adminId], references: [id], onDelete: SetNull)
+
+  status        ConversationStatus @default(open)
+  lastMessageAt DateTime?
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([adminId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  type    MessageType @default(text)
+  content String
+  isRead  Boolean     @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications & PWA push
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type   String
+  data   Json
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+// Structure prête pour les notifications push PWA (Web Push)
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Super admin
+// ---------------------------------------------------------------------------
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique // ex: "site_name", "site_logo"
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id     String  @id @default(cuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action      String // ex: "product.delete", "order.status_update", "settings.update"
+  description String?
+  ipAddress   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
