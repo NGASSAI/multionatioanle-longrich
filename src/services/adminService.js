@@ -9,7 +9,7 @@ export const getDashboardStats = async () => {
     prisma.product.count(),
     prisma.order.aggregate({
       where: { paymentStatus: "paid" },
-      _sum: { totalAmount: true },
+      _sum: { total: true }, // Correctif: 'total' au lieu de 'totalAmount'
     }),
   ]);
 
@@ -23,7 +23,7 @@ export const getDashboardStats = async () => {
     totalClients: totalUsers,
     totalOrders,
     totalProducts,
-    totalRevenue: salesAgg._sum.totalAmount || 0,
+    totalRevenue: salesAgg._sum.total || 0,
     recentOrders,
   };
 };

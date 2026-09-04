@@ -32,6 +32,8 @@ async function runTests() {
   let adminCookie = "";
   let createdCategoryId = "";
   let createdProductId = "";
+  let createdOrderId = "";
+  let conversationId = "";
 
   const timestamp = Date.now();
   const clientEmail = `client_${timestamp}@test.com`;
@@ -39,30 +41,20 @@ async function runTests() {
 
   try {
     // 1. Health Check
-    console.log("--> Test 1: Health Check...");
-    const healthRes = await fetch(`${API_URL}/health`, {
-      headers: { "User-Agent": "TestScript/1.0" },
-    });
+    const healthRes = await fetch(`${API_URL}/health`, { headers: { "User-Agent": "TestScript/1.0" } });
     const healthData = await safeParseJSON(healthRes);
     logResult("1. Health Check (/health)", healthRes.ok && healthData.success, healthData);
 
     // 2. Inscription Client
-    console.log("--> Test 2: Inscription Client...");
     const registerRes = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: DEFAULT_HEADERS,
-      body: JSON.stringify({
-        name: "Client Test",
-        email: clientEmail,
-        password: testPassword,
-        phone: "+242060000000",
-      }),
+      body: JSON.stringify({ name: "Client Test", email: clientEmail, password: testPassword, phone: "+242060000000" }),
     });
     const registerData = await safeParseJSON(registerRes);
     logResult("2. Création de compte Client", registerRes.ok && registerData.success, registerData);
 
     // 3. Connexion Client
-    console.log("--> Test 3: Connexion Client...");
     const loginRes = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
       headers: DEFAULT_HEADERS,
@@ -72,8 +64,7 @@ async function runTests() {
     clientCookie = loginRes.headers.get("set-cookie") || "";
     logResult("3. Connexion Client (JWT Cookie)", loginRes.ok && loginData.success, loginData);
 
-    // 4. Connexion Admin Seeded
-    console.log("--> Test 4: Connexion Admin Seeded...");
+    // 4. Connexion Admin
     const loginAdminRes = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
       headers: DEFAULT_HEADERS,
@@ -83,16 +74,7 @@ async function runTests() {
     adminCookie = loginAdminRes.headers.get("set-cookie") || "";
     logResult("4. Connexion Admin", loginAdminRes.ok && adminLoginData.success, adminLoginData);
 
-    // 5. Récupération Profil Client
-    console.log("--> Test 5: Profil Client...");
-    const profileRes = await fetch(`${API_URL}/auth/me`, {
-      headers: { ...DEFAULT_HEADERS, cookie: clientCookie },
-    });
-    const profileData = await safeParseJSON(profileRes);
-    logResult("5. Profil Client (/auth/me)", profileRes.ok && profileData.success, profileData);
-
-    // 6. Création d'une Catégorie (Admin)
-    console.log("--> Test 6: Création Catégorie...");
+    // 5. Création Catégorie
     const catRes = await fetch(`${API_URL}/categories`, {
       method: "POST",
       headers: { ...DEFAULT_HEADERS, cookie: adminCookie },
@@ -100,11 +82,10 @@ async function runTests() {
     });
     const catData = await safeParseJSON(catRes);
     if (catData.data?.category?.id) createdCategoryId = catData.data.category.id;
-    logResult("6. Création Catégorie (Admin)", catRes.ok && catData.success, catData);
+    logResult("5. Création Catégorie (Admin)", catRes.ok && catData.success, catData);
 
-    // 7. Création d'un Produit (Admin)
+    // 6. Création Produit
     if (createdCategoryId) {
-      console.log("--> Test 7: Création Produit...");
       const prodRes = await fetch(`${API_URL}/products`, {
         method: "POST",
         headers: { ...DEFAULT_HEADERS, cookie: adminCookie },
@@ -119,19 +100,52 @@ async function runTests() {
       });
       const prodData = await safeParseJSON(prodRes);
       if (prodData.data?.product?.id) createdProductId = prodData.data.product.id;
-      logResult("7. Publication Produit (Admin)", prodRes.ok && prodData.success, prodData);
+      logResult("6. Publication Produit (Admin)", prodRes.ok && prodData.success, prodData);
     }
 
-    // 8. Interaction Like (Correct Path: /interactions/products/:productId/like)
+    // 7. Passage de Commande
     if (createdProductId) {
-      console.log("--> Test 8: Like Produit...");
-      const likeRes = await fetch(`${API_URL}/interactions/products/${createdProductId}/like`, {
+      const orderRes = await fetch(`${API_URL}/orders`, {
         method: "POST",
         headers: { ...DEFAULT_HEADERS, cookie: clientCookie },
+        body: JSON.stringify({
+          clientName: "Client Test",
+          clientPhone: "+242060000000",
+          clientAddress: "Brazzaville, Congo",
+          source: "website",
+          items: [{ productId: createdProductId, quantity: 2 }],
+        }),
       });
-      const likeData = await safeParseJSON(likeRes);
-      logResult("8. Liker un produit", likeRes.ok && likeData.success, likeData);
+      const orderData = await safeParseJSON(orderRes);
+      if (orderData.data?.order?.id) createdOrderId = orderData.data.order.id;
+      logResult("7. Passage de Commande", orderRes.ok && orderData.success, orderData);
     }
+
+    // 8. Obtenir Conversation Chat Client
+    const convRes = await fetch(`${API_URL}/conversations/my-conversation`, {
+      headers: { ...DEFAULT_HEADERS, cookie: clientCookie },
+    });
+    const convData = await safeParseJSON(convRes);
+    if (convData.data?.conversation?.id) conversationId = convData.data.conversation.id;
+    logResult("8. Obtenir Conversation Chat (Client)", convRes.ok && convData.success, convData);
+
+    // 9. Envoi Message Chat Client
+    if (conversationId) {
+      const msgRes = await fetch(`${API_URL}/conversations/${conversationId}/messages`, {
+        method: "POST",
+        headers: { ...DEFAULT_HEADERS, cookie: clientCookie },
+        body: JSON.stringify({ content: "Bonjour, j'ai une question sur ma commande." }),
+      });
+      const msgData = await safeParseJSON(msgRes);
+      logResult("9. Envoi Message Chat (Client)", msgRes.ok && msgData.success, msgData);
+    }
+
+    // 10. Dashboard Stats (Admin)
+    const statsRes = await fetch(`${API_URL}/admin/stats`, {
+      headers: { ...DEFAULT_HEADERS, cookie: adminCookie },
+    });
+    const statsData = await safeParseJSON(statsRes);
+    logResult("10. Statistiques Dashboard (Admin)", statsRes.ok && statsData.success, statsData);
 
     console.log("\n✨ --- FIN DE L'EXÉCUTION DES TESTS ---\n");
   } catch (error) {

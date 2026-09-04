@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as orderController from "../controllers/orderController.js";
-import { protect, restrictTo } from "../middlewares/auth.js";
+import { protect, restrictTo, optionalAuth } from "../middlewares/auth.js";
 import { validate } from "../middlewares/validate.js";
 import {
   createOrderSchema,
@@ -10,8 +10,8 @@ import {
 
 const router = Router();
 
-// Créer une commande (Public / Client / Admin)
-router.post("/", validate({ body: createOrderSchema }), orderController.createOrder);
+// Créer une commande (Client connecté via token/cookie, ou client invité)
+router.post("/", optionalAuth, validate({ body: createOrderSchema }), orderController.createOrder);
 
 // Obtenir ses propres commandes (Client authentifié)
 router.get("/my-orders", protect, orderController.getMyOrders);

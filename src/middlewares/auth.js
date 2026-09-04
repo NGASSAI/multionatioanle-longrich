@@ -74,3 +74,19 @@ export const attachUserIfPresent = asyncHandler(async (req, res, next) => {
   }
   next();
 });
+// Middleware optionnel : attache req.user si le token JWT est valide, mais ne bloque pas si absent
+export const optionalAuth = async (req, res, next) => {
+  try {
+    const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
+    if (token) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+      if (user && user.status === "active") {
+        req.user = user;
+      }
+    }
+  } catch (error) {
+    // Si le token est invalide ou expiré, on continue sans req.user (mode invité)
+  }
+  next();
+};
