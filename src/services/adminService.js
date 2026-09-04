@@ -81,7 +81,7 @@ export const updateUserStatusOrRole = async (userId, { status, role }) => {
   if (status) dataToUpdate.status = status;
   if (role) dataToUpdate.role = role;
 
-  // Si l'utilisateur est bloqué, on révoque sa session (tokenVersion)
+  // Si l'utilisateur est bloqué, on révoque sa session ee (tokenVersion)
   if (status === "blocked") {
     dataToUpdate.tokenVersion = { increment: 1 };
   }
