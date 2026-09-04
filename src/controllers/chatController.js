@@ -1,4 +1,5 @@
 import * as chatService from "../services/chatService.js";
+import * as notificationService from "../services/notificationService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const getMyConversation = asyncHandler(async (req, res) => {
@@ -14,6 +15,11 @@ export const getAllConversations = asyncHandler(async (req, res) => {
 export const sendMessage = asyncHandler(async (req, res) => {
   const { conversationId } = req.params;
   const result = await chatService.saveMessage(conversationId, req.user.id, req.body);
+
+  // Notifie l'autre participant de la conversation (client <-> admin assigne)
+  const io = req.app.get("io");
+  await notificationService.notifyNewMessage(io, result);
+
   res.status(201).json({ success: true, data: result });
 });
 

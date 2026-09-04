@@ -24,6 +24,9 @@ const envSchema = z.object({
 
   UPLOAD_DIR: z.string().default("uploads"),
   MAX_UPLOAD_SIZE_MB: z.coerce.number().default(5),
+  CLOUDINARY_CLOUD_NAME: z.string().min(1, "CLOUDINARY_CLOUD_NAME manquant"),
+  CLOUDINARY_API_KEY: z.string().min(1, "CLOUDINARY_API_KEY manquant"),
+  CLOUDINARY_API_SECRET: z.string().min(1, "CLOUDINARY_API_SECRET manquant"),
 });
 
 const parsed = envSchema.safeParse(process.env);

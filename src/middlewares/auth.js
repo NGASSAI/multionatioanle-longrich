@@ -54,7 +54,8 @@ export const restrictTo =
   };
 
 // Pour les routes accessibles à tous mais dont le comportement change si connecté
-// (ex. savoir si l'utilisateur courant a liké un produit) : n'échoue jamais,
+// (ex. savoir si l'utilisateur courant a liké un produit, ou permettre une commande
+// invité tout en reconnaissant un client déjà authentifié) : n'échoue jamais,
 // attache req.user seulement si un token valide est présent.
 export const attachUserIfPresent = asyncHandler(async (req, res, next) => {
   const bearer = req.headers.authorization?.startsWith("Bearer ")
@@ -74,19 +75,7 @@ export const attachUserIfPresent = asyncHandler(async (req, res, next) => {
   }
   next();
 });
-// Middleware optionnel : attache req.user si le token JWT est valide, mais ne bloque pas si absent
-export const optionalAuth = async (req, res, next) => {
-  try {
-    const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
-    if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await prisma.user.findUnique({ where: { id: decoded.id } });
-      if (user && user.status === "active") {
-        req.user = user;
-      }
-    }
-  } catch (error) {
-    // Si le token est invalide ou expiré, on continue sans req.user (mode invité)
-  }
-  next();
-};
+
+// Alias : orderRoutes.js utilise ce nom pour les commandes passées par un
+// client invité (non connecté) tout en reconnaissant un client déjà authentifié.
+export const optionalAuth = attachUserIfPresent;

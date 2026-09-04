@@ -1,7 +1,7 @@
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/AppError.js";
 
-// Récupérer les données globales du dashboard
+// Recuperer les donnees globales du dashboard
 export const getDashboardStats = async () => {
   const [totalUsers, totalOrders, totalProducts, salesAgg] = await prisma.$transaction([
     prisma.user.count({ where: { role: "client" } }),
@@ -9,7 +9,7 @@ export const getDashboardStats = async () => {
     prisma.product.count(),
     prisma.order.aggregate({
       where: { paymentStatus: "paid" },
-      _sum: { total: true }, // Correctif: 'total' au lieu de 'totalAmount'
+      _sum: { total: true },
     }),
   ]);
 
@@ -28,12 +28,13 @@ export const getDashboardStats = async () => {
   };
 };
 
-// Récupérer tous les utilisateurs avec filtres et pagination
-export const getUsers = async ({ search, role, status, page = 1, limit = 20 }) => {
+// Recuperer les CLIENTS uniquement, avec filtres et pagination.
+// Route reservee a l'Admin : ne doit jamais remonter de comptes admin/super_admin.
+export const getUsers = async ({ search, status, page = 1, limit = 20 }) => {
   const skip = (Number(page) - 1) * Number(limit);
 
   const where = {
-    ...(role && { role }),
+    role: "client",
     ...(status && { status }),
     ...(search && {
       OR: [
@@ -72,16 +73,23 @@ export const getUsers = async ({ search, role, status, page = 1, limit = 20 }) =
   };
 };
 
-// Modifier le statut ou rôle d'un utilisateur (Super-Admin)
-export const updateUserStatusOrRole = async (userId, { status, role }) => {
+// Bloquer/debloquer ou modifier un CLIENT (pas un compte admin).
+// Empeche explicitement de toucher un compte admin/super_admin par cette route.
+export const updateUserStatusOrRole = async (userId, { status }) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw AppError.notFound("Utilisateur introuvable");
 
+  if (user.role !== "client") {
+    throw AppError.forbidden(
+      "Cette route ne permet de modifier que des comptes clients",
+      "FORBIDDEN_TARGET"
+    );
+  }
+
   const dataToUpdate = {};
   if (status) dataToUpdate.status = status;
-  if (role) dataToUpdate.role = role;
 
-  // Si l'utilisateur est bloqué, on révoque sa session ee (tokenVersion)
+  // Si l'utilisateur est bloque, on revoque sa session active (tokenVersion)
   if (status === "blocked") {
     dataToUpdate.tokenVersion = { increment: 1 };
   }

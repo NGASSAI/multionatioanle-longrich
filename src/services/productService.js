@@ -155,7 +155,9 @@ export const updateProduct = async (id, data) => {
     });
   });
 };
-
+export const getProductByIdRaw = async (id) => {
+  return prisma.product.findUnique({ where: { id } });
+};
 export const deleteProduct = async (id) => {
   const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw AppError.notFound("Produit introuvable");
