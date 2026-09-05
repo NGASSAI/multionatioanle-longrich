@@ -16,7 +16,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
   const { conversationId } = req.params;
   const result = await chatService.saveMessage(conversationId, req.user.id, req.body);
 
-  // Notifier l'autre participant de la conversation (client <-> admin assigne)
+  // Notifie l'autre participant de la conversation (client <-> admin assigne)
   const io = req.app.get("io");
   await notificationService.notifyNewMessage(io, result);
 
