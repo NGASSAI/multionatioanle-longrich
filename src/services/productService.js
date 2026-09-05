@@ -9,6 +9,22 @@ const generateSlug = (text) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "");
 
+// Ajoute isLikedByMe a chaque produit si un utilisateur connecte est fourni,
+// sans requete supplementaire par produit (une seule requete groupee).
+const attachLikedByMe = async (products, currentUserId) => {
+  if (!currentUserId || products.length === 0) {
+    return products.map((p) => ({ ...p, isLikedByMe: false }));
+  }
+
+  const likes = await prisma.productLike.findMany({
+    where: { userId: currentUserId, productId: { in: products.map((p) => p.id) } },
+    select: { productId: true },
+  });
+  const likedIds = new Set(likes.map((l) => l.productId));
+
+  return products.map((p) => ({ ...p, isLikedByMe: likedIds.has(p.id) }));
+};
+
 export const getAllProducts = async ({
   categoryId,
   search,
@@ -20,6 +36,7 @@ export const getAllProducts = async ({
   page = 1,
   limit = 12,
   includeInactive = false,
+  currentUserId = null,
 }) => {
   const where = {
     ...(includeInactive ? {} : { isActive: true }),
@@ -45,22 +62,22 @@ export const getAllProducts = async ({
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  const [products, total] = await prisma.$transaction([
-    prisma.product.findMany({
-      where,
-      include: {
-        category: { select: { id: true, name: true, slug: true } },
-        images: { orderBy: { order: "asc" } },
-      },
-      orderBy: { [sortBy]: order },
-      skip,
-      take: Number(limit),
-    }),
-    prisma.product.count({ where }),
-  ]);
+  const products = await prisma.product.findMany({
+    where,
+    include: {
+      category: { select: { id: true, name: true, slug: true } },
+      images: { orderBy: { order: "asc" } },
+    },
+    orderBy: { [sortBy]: order },
+    skip,
+    take: Number(limit),
+  });
+  const total = await prisma.product.count({ where });
+
+  const productsWithLikes = await attachLikedByMe(products, currentUserId);
 
   return {
-    products,
+    products: productsWithLikes,
     pagination: {
       total,
       page: Number(page),
@@ -70,7 +87,7 @@ export const getAllProducts = async ({
   };
 };
 
-export const getProductBySlug = async (slug, incrementViews = true) => {
+export const getProductBySlug = async (slug, { incrementViews = true, currentUserId = null } = {}) => {
   const product = await prisma.product.findUnique({
     where: { slug },
     include: {
@@ -99,7 +116,12 @@ export const getProductBySlug = async (slug, incrementViews = true) => {
     });
   }
 
-  return product;
+  const [withLikes] = await attachLikedByMe([product], currentUserId);
+  return withLikes;
+};
+
+export const getProductByIdRaw = async (id) => {
+  return prisma.product.findUnique({ where: { id } });
 };
 
 export const createProduct = async (data) => {
@@ -108,10 +130,10 @@ export const createProduct = async (data) => {
   const sku = productData.sku || `PRD-${Date.now()}`;
 
   const existingSlug = await prisma.product.findUnique({ where: { slug } });
-  if (existingSlug) throw AppError.conflict("Un produit avec ce slug existe déjà", "SLUG_TAKEN");
+  if (existingSlug) throw AppError.conflict("Un produit avec ce slug existe deja", "SLUG_TAKEN");
 
   const existingSku = await prisma.product.findUnique({ where: { sku } });
-  if (existingSku) throw AppError.conflict("Un produit avec ce SKU existe déjà", "SKU_TAKEN");
+  if (existingSku) throw AppError.conflict("Un produit avec ce SKU existe deja", "SKU_TAKEN");
 
   return prisma.product.create({
     data: {
@@ -131,6 +153,7 @@ export const createProduct = async (data) => {
     include: { images: true, category: true },
   });
 };
+
 export const updateProduct = async (id, data) => {
   const { images, ...productData } = data;
   const product = await prisma.product.findUnique({ where: { id } });
@@ -155,9 +178,7 @@ export const updateProduct = async (id, data) => {
     });
   });
 };
-export const getProductByIdRaw = async (id) => {
-  return prisma.product.findUnique({ where: { id } });
-};
+
 export const deleteProduct = async (id) => {
   const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw AppError.notFound("Produit introuvable");
