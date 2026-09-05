@@ -150,7 +150,10 @@ export const getOrderById = async (orderId, requestingUser) => {
 export const updateOrderStatus = async (orderId, newStatus, adminId) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { items: true },
+   include: {
+  items: true,
+  confirmedByAdmin: { select: { id: true, name: true } },
+},
   });
 
   if (!order) throw AppError.notFound("Commande introuvable");
@@ -174,7 +177,10 @@ export const updateOrderStatus = async (orderId, newStatus, adminId) => {
           confirmedById: adminId,
           confirmedAt: new Date(),
         },
-        include: { items: true },
+       include: {
+  items: true,
+  confirmedByAdmin: { select: { id: true, name: true } },
+},
       });
     });
   }
@@ -187,7 +193,10 @@ export const updateOrderStatus = async (orderId, newStatus, adminId) => {
       confirmedById: adminId,
       confirmedAt: new Date(),
     },
-    include: { items: true },
+include: {
+  items: true,
+  confirmedByAdmin: { select: { id: true, name: true } },
+},
   });
 };
 
