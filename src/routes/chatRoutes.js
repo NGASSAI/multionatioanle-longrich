@@ -22,6 +22,7 @@ router.post(
 
 router.patch("/:conversationId/read", protect, chatController.markAsRead);
 router.delete("/:conversationId/messages/:messageId", protect, chatController.deleteMessage);
+router.delete("/:id", protect, chatController.deleteConversation);
 router.get("/:id", protect, restrictTo("admin"), chatController.getConversationById);
 
 export default router;

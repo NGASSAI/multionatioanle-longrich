@@ -140,3 +140,17 @@ export const deleteMessage = async (messageId, userId) => {
   await prisma.message.delete({ where: { id: messageId } });
   return { conversationId: message.conversationId, messageId };
 };
+// Supprime toute la conversation — accessible au client proprietaire ou a un admin/super_admin.
+export const deleteConversation = async (conversationId, user) => {
+  const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
+  if (!conversation) throw AppError.notFound("Conversation introuvable");
+
+  const isOwner = conversation.clientId === user.id;
+  const isStaff = user.role === "admin" || user.role === "super_admin";
+  if (!isOwner && !isStaff) {
+    throw AppError.forbidden("Vous n'avez pas accès à cette conversation");
+  }
+
+  await prisma.conversation.delete({ where: { id: conversationId } });
+  return { clientId: conversation.clientId, adminId: conversation.adminId };
+};
