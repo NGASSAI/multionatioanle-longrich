@@ -15,5 +15,6 @@ router.get("/stats/detailed", protect, restrictTo("admin"), statsController.getS
 // Gestion des CLIENTS (pas des comptes admin) — reservee a l'Admin.
 router.get("/users", protect, restrictTo("admin"), adminController.getUsers);
 router.patch("/users/:id", protect, restrictTo("admin"), adminController.updateUserStatusOrRole);
+router.delete("/users/:id", protect, restrictTo("admin"), adminController.deleteUser);
 
 export default router;

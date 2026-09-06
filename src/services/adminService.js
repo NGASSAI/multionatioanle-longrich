@@ -106,3 +106,15 @@ export const updateUserStatusOrRole = async (userId, { status }) => {
     },
   });
 };
+export const deleteUser = async (userId) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw AppError.notFound("Utilisateur introuvable");
+  if (user.role !== "client") {
+    throw AppError.forbidden(
+      "Cette route ne permet de supprimer que des comptes clients",
+      "FORBIDDEN_TARGET"
+    );
+  }
+  await prisma.user.delete({ where: { id: userId } });
+  return user;
+};

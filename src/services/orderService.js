@@ -74,10 +74,11 @@ export const createOrder = async (orderData, creatorUser = null) => {
   });
 };
 
-export const getAllOrders = async ({ status, source, search, page = 1, limit = 10 }) => {
+export const getAllOrders = async ({ status, source, search, userId, page = 1, limit = 10 }) => {
   const where = {
     ...(status ? { status } : {}),
     ...(source ? { source } : {}),
+    ...(userId ? { userId } : {}),
     ...(search
       ? {
           OR: [
