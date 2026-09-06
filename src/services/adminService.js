@@ -48,13 +48,15 @@ export const getUsers = async ({ search, status, page = 1, limit = 20 }) => {
     prisma.user.findMany({
       where,
       select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        createdAt: true,
-      },
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  avatar: true,
+  role: true,
+  status: true,
+  createdAt: true,
+},
       orderBy: { createdAt: "desc" },
       skip,
       take: Number(limit),
@@ -117,4 +119,4 @@ export const deleteUser = async (userId) => {
   }
   await prisma.user.delete({ where: { id: userId } });
   return user;
-};
+};  
