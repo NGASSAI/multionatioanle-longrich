@@ -64,6 +64,11 @@ export const deleteCategory = async (id) => {
     include: { _count: { select: { products: true } } },
   });
   if (!category) throw AppError.notFound("Catégorie introuvable");
-
+  if (category._count.products > 0) {
+    throw AppError.conflict(
+      `Impossible de supprimer : ${category._count.products} produit(s) sont encore rattachés à cette catégorie.`,
+      "CATEGORY_HAS_PRODUCTS"
+    );
+  }
   return prisma.category.delete({ where: { id } });
 };
