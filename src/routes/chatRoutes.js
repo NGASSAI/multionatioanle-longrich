@@ -21,5 +21,6 @@ router.post(
 );
 
 router.patch("/:conversationId/read", protect, chatController.markAsRead);
+router.get("/:id", protect, restrictTo("admin"), chatController.getConversationById);
 
 export default router;

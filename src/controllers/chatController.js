@@ -27,3 +27,7 @@ export const markAsRead = asyncHandler(async (req, res) => {
   await chatService.markMessagesAsRead(req.params.conversationId, req.user.id);
   res.json({ success: true, data: null });
 });
+export const getConversationById = asyncHandler(async (req, res) => {
+  const conversation = await chatService.getConversationById(req.params.id);
+  res.json({ success: true, data: { conversation } });
+});

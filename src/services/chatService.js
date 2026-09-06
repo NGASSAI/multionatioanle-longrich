@@ -115,3 +115,18 @@ export const markMessagesAsRead = async (conversationId, userId) => {
     data: { isRead: true },
   });
 };
+export const getConversationById = async (conversationId) => {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      client: { select: { id: true, name: true, email: true, avatar: true } },
+      admin: { select: { id: true, name: true } },
+      messages: {
+        orderBy: { createdAt: "asc" },
+        include: { sender: { select: { id: true, name: true, role: true, avatar: true } } },
+      },
+    },
+  });
+  if (!conversation) throw AppError.notFound("Conversation introuvable");
+  return conversation;
+};
