@@ -35,21 +35,15 @@ export const initSocket = (httpServer) => {
   io.on("connection", (socket) => {
     socket.join(`user:${socket.user.id}`);
 
-    // Rejoint la room d'une conversation — verification stricte des droits :
-    // seul le client concerne ou un admin/super_admin peut y entrer (cahier
-    // des charges section 4 : "seul le client concerne et les admins peuvent
-    // rejoindre une conversation donnee").
     socket.on("join_conversation", async (conversationId, callback) => {
       try {
         const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
         if (!conversation) return callback?.({ error: "Conversation introuvable" });
-
         const isOwner = conversation.clientId === socket.user.id;
         const isStaff = socket.user.role === "admin" || socket.user.role === "super_admin";
         if (!isOwner && !isStaff) {
           return callback?.({ error: "Acces refuse a cette conversation" });
         }
-
         socket.join(`conversation:${conversationId}`);
         callback?.({ success: true });
       } catch {
@@ -61,24 +55,17 @@ export const initSocket = (httpServer) => {
       socket.leave(`conversation:${conversationId}`);
     });
 
-    // Envoi d'un message — reutilise chatService.saveMessage (meme logique
-    // que la route REST POST /conversations/:id/messages), puis diffuse a
-    // tous les participants deja dans la room et notifie le destinataire absent.
     socket.on("send_message", async ({ conversationId, content, type = "text" }, callback) => {
       try {
         const result = await chatService.saveMessage(conversationId, socket.user.id, { content, type });
-
         io.to(`conversation:${conversationId}`).emit("message:new", result.message);
         await notificationService.notifyNewMessage(io, result);
-
         callback?.({ success: true, message: result.message });
       } catch (err) {
         callback?.({ error: err.message || "Erreur lors de l'envoi du message" });
       }
     });
 
-    // Marque les messages comme lus et informe l'autre participant (utile
-    // pour un indicateur "vu" cote expediteur).
     socket.on("mark_read", async (conversationId) => {
       try {
         await chatService.markMessagesAsRead(conversationId, socket.user.id);
@@ -88,6 +75,16 @@ export const initSocket = (httpServer) => {
         });
       } catch {
         // Echec silencieux : pas critique, l'utilisateur peut rouvrir la conversation.
+      }
+    });
+
+    socket.on("delete_message", async ({ messageId }, callback) => {
+      try {
+        const result = await chatService.deleteMessage(messageId, socket.user.id);
+        io.to(`conversation:${result.conversationId}`).emit("message:deleted", { messageId: result.messageId });
+        callback?.({ success: true });
+      } catch (err) {
+        callback?.({ error: err.message || "Erreur lors de la suppression" });
       }
     });
   });

@@ -130,3 +130,13 @@ export const getConversationById = async (conversationId) => {
   if (!conversation) throw AppError.notFound("Conversation introuvable");
   return conversation;
 };
+// Supprime un message — seul son auteur peut le faire.
+export const deleteMessage = async (messageId, userId) => {
+  const message = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!message) throw AppError.notFound("Message introuvable");
+  if (message.senderId !== userId) {
+    throw AppError.forbidden("Vous ne pouvez supprimer que vos propres messages");
+  }
+  await prisma.message.delete({ where: { id: messageId } });
+  return { conversationId: message.conversationId, messageId };
+};

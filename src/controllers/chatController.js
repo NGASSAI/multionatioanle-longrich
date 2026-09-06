@@ -31,3 +31,9 @@ export const getConversationById = asyncHandler(async (req, res) => {
   const conversation = await chatService.getConversationById(req.params.id);
   res.json({ success: true, data: { conversation } });
 });
+export const deleteMessage = asyncHandler(async (req, res) => {
+  const result = await chatService.deleteMessage(req.params.messageId, req.user.id);
+  const io = req.app.get("io");
+  io?.to(`conversation:${result.conversationId}`).emit("message:deleted", { messageId: result.messageId });
+  res.json({ success: true, data: null });
+});
