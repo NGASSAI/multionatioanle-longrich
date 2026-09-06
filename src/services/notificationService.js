@@ -110,10 +110,33 @@ export const notifyOrderStatusChange = async (io, order) => {
 // Nouveau message de chat -> notifie l'autre participant de la conversation
 // (le client si l'expediteur est un admin, l'admin assigne si l'expediteur est le client).
 export const notifyNewMessage = async (io, { message, conversation }) => {
+  // Message envoye par le CLIENT et aucun admin assigne : notifie tous les
+  // admins actifs (comme notifyNewOrder), le premier qui repond recupere
+  // l'assignation (logique deja geree dans chatService.saveMessage).
+  if (message.senderId === conversation.clientId && !conversation.adminId) {
+    const admins = await prisma.user.findMany({
+      where: { role: "admin", status: "active" },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((admin) =>
+        createAndEmitNotification(io, {
+          userId: admin.id,
+          type: "chat.new_message",
+          data: {
+            conversationId: conversation.id,
+            messagePreview: message.content.slice(0, 100),
+          },
+        })
+      )
+    );
+    return;
+  }
+
   const recipientId =
     message.senderId === conversation.clientId ? conversation.adminId : conversation.clientId;
 
-  if (!recipientId) return; // pas encore d'admin assigne a cette conversation
+  if (!recipientId) return;
 
   await createAndEmitNotification(io, {
     userId: recipientId,
